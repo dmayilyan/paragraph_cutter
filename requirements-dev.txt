@@ -1,0 +1,7 @@
+black
+mypy
+pylama
+flake8
+bandit
+pylint
+prospector
