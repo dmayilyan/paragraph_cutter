@@ -3,25 +3,47 @@ import os
 import cv2
 import numpy as np
 from scipy import fftpack
+import matplotlib.pyplot as plt
+from scipy.ndimage import uniform_filter1d
+from scipy.signal import find_peaks
 
 
-def read_image():
-    print(os.listdir("./HSH"))
-    img = cv2.imread("./HSH/HSH_vol1_page14.jpg", cv2.IMREAD_GRAYSCALE)
-    plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
-    plt.imshow(img, cmap="gray", interpolation="bicubic")
+def plot_projection(img, axis):
+    meanh = np.average(img, axis=axis)
+    plt.plot(meanh)
+    plt.xlim(100, 1750)
+    plt.show()
+
+
+def read_image(img_path: str):
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    plot_projection(img, 0)
+#     plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
+#     plt.imshow(img, cmap="gray", interpolation="bicubic")
+#     plt.show()
+    return img
+
+
+def read_images():
+    base = "HSH"
+    file_list = os.listdir(base)
+    return read_image(f"{base}/{file_list[1]}")
 
 
 def cut_page(img):
-    CUT1 = 354
-    CUT2 = 677
+    # Horizontal averaging
+    meanh = np.average(img, axis=0)
+    smoothed = uniform_filter1d(meanh, size=10)
+    # A margin is taken to remove page edge peaks
+    peaks, _ = find_peaks(smoothed[100:-100], height=230, distance=400)
 
-    return img[:, 0:CUT1], img[:, CUT1:CUT2], img[:, CUT2:]
+    return img[:, 0:peaks[0]], img[:, peaks[0]:peaks[1]], img[:, peaks[1]:]
 
 
 def crop_top_bottom(ims):
     TOL = 220
     MARGIN = 5
+    top_cut = bottom_cut = 0
     cr_ims = []
     for im in ims:
         blur_img = cv2.GaussianBlur(im, (27, 27), 0)
@@ -37,7 +59,7 @@ def crop_top_bottom(ims):
                 break
             bottom_cut = mm.size - i
 
-        cr_ims.append(im[top_cut - MARGIN : bottom_cut + MARGIN, :])
+        cr_ims.append(im[top_cut - MARGIN: bottom_cut + MARGIN, :])
 
     return cr_ims
 
@@ -46,6 +68,7 @@ def crop_left_right(ims):
     TOL = 220
     MARGIN = 5
     cr_ims = []
+    left_cut = right_cut = 0
     for im in ims:
         blur_img = cv2.GaussianBlur(im, (9, 9), 0)
         mm = np.mean(blur_img, axis=0)
@@ -57,15 +80,14 @@ def crop_left_right(ims):
         for i, val in enumerate(mm[::-1]):
             if val < TOL:
                 break
-            else:
-                right_cut = mm.size - i
+            right_cut = mm.size - i
 
-        cr_ims.append(im[:, left_cut - MARGIN : right_cut + MARGIN])
+        cr_ims.append(im[:, left_cut - MARGIN: right_cut + MARGIN])
 
     return cr_ims
 
 
-def process_images():
+def process_images(img):
     ims = cut_page(img)
     ims = crop_top_bottom(ims)
     ims = crop_left_right(ims)
@@ -78,6 +100,8 @@ def process_images():
     for ax, im in zip(axs, ims):
         ax.imshow(im, cmap="gray", interpolation="bicubic")
         ax.label_outer()
+
+    plt.show()
 
 
 def get_zscore(im, freq_cut, window_size):
@@ -102,4 +126,6 @@ def get_zscore(im, freq_cut, window_size):
 
 
 if __name__ == "__main__":
-    read_image()
+    img = read_images()
+    ims = cut_page(img)
+    process_images(img)
