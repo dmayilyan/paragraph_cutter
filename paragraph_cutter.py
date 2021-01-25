@@ -17,7 +17,7 @@ def plot_projection(img, axis):
 
 def read_image(img_path: str):
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-    plot_projection(img, 0)
+    # plot_projection(img, 0)
 #     plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
 #     plt.imshow(img, cmap="gray", interpolation="bicubic")
 #     plt.show()
@@ -27,7 +27,7 @@ def read_image(img_path: str):
 def read_images():
     base = "HSH"
     file_list = os.listdir(base)
-    return read_image(f"{base}/{file_list[1]}")
+    return read_image(f"{base}/{file_list[27]}")
 
 
 def cut_page(img):
@@ -87,10 +87,42 @@ def crop_left_right(ims):
     return cr_ims
 
 
+def crop_lines(im):
+    blur = cv2.GaussianBlur(im, (9, 1), 0)
+    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 1))
+    dilate = cv2.dilate(thresh, kernel, iterations=5)
+
+    # Find all contours
+    contours, hierarchy = cv2.findContours(dilate, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key = cv2.contourArea, reverse = True)
+
+    cut_ims = []
+    for contour in contours:
+        minAreaRect = cv2.minAreaRect(contour)
+        x, y, w, h = cv2.boundingRect(contour)
+        cut_ims.append(im[y:y+h, x:x+w])
+
+    return cut_ims
+
+
 def process_images(img):
     ims = cut_page(img)
     ims = crop_top_bottom(ims)
     ims = crop_left_right(ims)
+
+    # fig = plt.figure()
+    # plt.imshow(ims[0])
+    # plt.savefig("qwe.png")
+
+    cropped_lines = []
+    for im in ims:
+        cropped_lines.append(crop_lines(im))
+
+    fig=plt.figure()
+    plt.imshow(cropped_lines[0][4])
+    plt.savefig("qwe.png")
 
     fig = plt.figure(figsize=(img.shape[0] / 100, img.shape[1] / 100))
     fig.suptitle("Cuts of the page")
