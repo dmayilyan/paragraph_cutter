@@ -6,6 +6,7 @@ from scipy import fftpack
 import matplotlib.pyplot as plt
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks
+from multiprocessing import Pool
 
 
 def plot_projection(img, axis):
@@ -27,7 +28,7 @@ def read_image(img_path: str):
 def read_images():
     base = "HSH"
     file_list = os.listdir(base)
-    return read_image(f"{base}/{file_list[27]}")
+    return read_image(f"{base}/{file_list[1]}")
 
 
 def cut_page(img):
@@ -46,7 +47,8 @@ def crop_top_bottom(ims):
     top_cut = bottom_cut = 0
     cr_ims = []
     for im in ims:
-        blur_img = cv2.GaussianBlur(im, (27, 27), 0)
+        # We don't care about blur in other axis
+        blur_img = cv2.GaussianBlur(im, (1, 27), 0)
         mm = np.mean(blur_img, axis=1)
         for i, val in enumerate(mm):
             if val < TOL:
@@ -70,7 +72,8 @@ def crop_left_right(ims):
     cr_ims = []
     left_cut = right_cut = 0
     for im in ims:
-        blur_img = cv2.GaussianBlur(im, (9, 9), 0)
+        # We don't care about blur in other axis
+        blur_img = cv2.GaussianBlur(im, (9, 1), 0)
         mm = np.mean(blur_img, axis=0)
         for i, val in enumerate(mm):
             if val < TOL:
@@ -115,8 +118,11 @@ def process_images(img):
     # fig = plt.figure()
     # plt.imshow(ims[0])
     # plt.savefig("qwe.png")
-
+ 
     cropped_lines = []
+    max_workers = 4
+    # with Pool(max_workers) as p:
+        # cropped_lines.append(p.map(crop_lines, ims))
     for im in ims:
         cropped_lines.append(crop_lines(im))
 
