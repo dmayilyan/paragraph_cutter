@@ -41,55 +41,71 @@ def cut_page(img):
 
 
 def crop_top_bottom(ims):
-    TOL = 220
-    MARGIN = 5
+    tolerance = 220
+    margin = 5
     top_cut = bottom_cut = 0
     cr_ims = []
     for im in ims:
         blur_img = cv2.GaussianBlur(im, (27, 27), 0)
         mm = np.mean(blur_img, axis=1)
         for i, val in enumerate(mm):
-            if val < TOL:
+            if val < tolerance:
                 break
             else:
                 top_cut = i
 
         for i, val in enumerate(mm[::-1]):
-            if val < TOL:
+            if val < tolerance:
                 break
             bottom_cut = mm.size - i
 
-        cr_ims.append(im[top_cut - MARGIN: bottom_cut + MARGIN, :])
+        cr_ims.append(im[top_cut - margin: bottom_cut + margin, :])
 
     return cr_ims
 
 
 def crop_left_right(ims):
-    TOL = 220
-    MARGIN = 5
+    tolerance = 220
+    margin = 5
     cr_ims = []
     left_cut = right_cut = 0
     for im in ims:
         blur_img = cv2.GaussianBlur(im, (9, 9), 0)
         mm = np.mean(blur_img, axis=0)
         for i, val in enumerate(mm):
-            if val < TOL:
+            if val < tolerance:
                 break
             left_cut = i
 
         for i, val in enumerate(mm[::-1]):
-            if val < TOL:
+            if val < tolerance:
                 break
             right_cut = mm.size - i
 
-        cr_ims.append(im[:, left_cut - MARGIN: right_cut + MARGIN])
+        cr_ims.append(im[:, left_cut - margin: right_cut + margin])
 
     return cr_ims
 
 
+def is_valid_segment(im_segment):
+    count = len(im_segment.flatten())
+    if count < 600:
+        return False
+
+    side_ratio = im_segment.shape[1] / im_segment.shape[0]
+    if side_ratio < 5:
+        return False
+
+    color_ratio = sum(im_segment.flatten() < 128) / count
+    if color_ratio < 0.16:
+        return False
+
+    return True
+
+
 def crop_lines(im):
     blur = cv2.GaussianBlur(im, (9, 1), 0)
-    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 1))
     dilate = cv2.dilate(thresh, kernel, iterations=5)
@@ -102,7 +118,12 @@ def crop_lines(im):
     for contour in contours:
         minAreaRect = cv2.minAreaRect(contour)
         x, y, w, h = cv2.boundingRect(contour)
-        cut_ims.append(im[y:y+h, x:x+w])
+        # Margin adjustment
+        y -= 2
+        h += 4
+        val_cut = is_valid_segment(im[y:y+h, x:x+w])
+        # if val_cut:
+        cut_ims.append(val_cut)
 
     return cut_ims
 
@@ -121,7 +142,7 @@ def process_images(img):
         cropped_lines.append(crop_lines(im))
 
     fig=plt.figure()
-    plt.imshow(cropped_lines[0][4])
+    plt.imshow(cropped_lines[0][3], cmap="gray")
     plt.savefig("qwe.png")
 
     fig = plt.figure(figsize=(img.shape[0] / 100, img.shape[1] / 100))
