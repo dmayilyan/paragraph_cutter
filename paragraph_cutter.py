@@ -1,12 +1,13 @@
 import os
+import re
+from multiprocessing import Pool
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy import fftpack
-import matplotlib.pyplot as plt
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks
-from multiprocessing import Pool
 
 
 def plot_projection(img, axis):
@@ -16,19 +17,44 @@ def plot_projection(img, axis):
     plt.show()
 
 
+def filter_title_pages(file_list):
+    pages = {}
+    for p in file_list:
+        pages[int(re.search(r"page([\d]{1,3})", p.path).group(1))] = p.path
+
+    page_numbers = sorted(pages.keys())
+    exclude_pages = page_numbers[:5] + page_numbers[-4:]
+
+    # black_ratio = []
+    # for i, p in enumerate(file_list):
+    # img = read_image(p.path)
+    # ratio = np.sum(img.flatten() < 128) / len(img.flatten())
+    # black_ratio.append(ratio)
+    # if ratio < 0.058:
+    # print(p.path, ratio)
+
+    # plt.hist(black_ratio, bins = 50)
+    # plt.savefig("black_ratio.png")
+
+    return [k for k, v in pages.items() if k not in exclude_pages]
+
+
 def read_image(img_path: str):
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     # plot_projection(img, 0)
-#     plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
-#     plt.imshow(img, cmap="gray", interpolation="bicubic")
-#     plt.show()
+    #     plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
+    #     plt.imshow(img, cmap="gray", interpolation="bicubic")
+    #     plt.show()
     return img
 
 
 def read_images():
     base = "HSH"
-    file_list = os.listdir(base)
-    return read_image(f"{base}/{file_list[1]}")
+    # file_list = os.listdir(base)
+    file_list = os.scandir(base)
+    file_list = filter_title_pages(file_list)
+    # print(f"{base}/{file_list[4]}")
+    # return read_image(f"{base}/{file_list[4]}")
 
 
 def cut_page(img):
@@ -61,7 +87,7 @@ def crop_top_bottom(ims):
                 break
             bottom_cut = mm.size - i
 
-        cr_ims.append(im[top_cut - margin: bottom_cut + margin, :])
+        cr_ims.append(im[top_cut - margin : bottom_cut + margin, :])
 
     return cr_ims
 
@@ -85,7 +111,7 @@ def crop_left_right(ims):
                 break
             right_cut = mm.size - i
 
-        cr_ims.append(im[:, left_cut - margin: right_cut + margin])
+        cr_ims.append(im[:, left_cut - margin : right_cut + margin])
 
     return cr_ims
 
@@ -114,8 +140,10 @@ def crop_lines(im):
     dilate = cv2.dilate(thresh, kernel, iterations=5)
 
     # Find all contours
-    contours, hierarchy = cv2.findContours(dilate, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key = cv2.contourArea, reverse = True)
+    contours, hierarchy = cv2.findContours(
+        dilate, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
+    )
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
     cut_ims = []
     for contour in contours:
@@ -124,30 +152,34 @@ def crop_lines(im):
         # Margin adjustment
         y -= 2
         h += 4
-        val_cut = is_valid_segment(im[y:y+h, x:x+w])
+        val_cut = is_valid_segment(im[y : y + h, x : x + w])
         # if val_cut:
-        cut_ims.append(val_cut)
+        cut_ims.append(im[y : y + h, x : x + w])
 
     return cut_ims
 
 
 def process_images(img):
+    print(img.shape)
     ims = cut_page(img)
     ims = crop_top_bottom(ims)
     ims = crop_left_right(ims)
+    print(ims[0].shape)
+    print(ims[0], "ims")
 
     # fig = plt.figure()
     # plt.imshow(ims[0])
     # plt.savefig("qwe.png")
- 
+
     cropped_lines = []
     max_workers = 4
     # with Pool(max_workers) as p:
-        # cropped_lines.append(p.map(crop_lines, ims))
+    # cropped_lines.append(p.map(crop_lines, ims))
     for im in ims:
+        print(im)
         cropped_lines.append(crop_lines(im))
 
-    fig=plt.figure()
+    fig = plt.figure()
     plt.imshow(cropped_lines[0][3], cmap="gray")
     plt.savefig("qwe.png")
 
@@ -177,14 +209,19 @@ def get_zscore(im, freq_cut, window_size):
     cut_signal = fftpack.ifft(cut_f_signal)
 
     signal_pd = pd.DataFrame(signal_series, columns=["data"])
-    signal_pd["std_col"] = signal_pd["data"].rolling(window=window_size, center=True).std()
-    signal_pd["mean_col"] = signal_pd["data"].rolling(window=window_size, center=True).mean()
-    signal_pd["zscore"] = (signal_pd["data"] - signal_pd["mean_col"]) / signal_pd["std_col"]
+    signal_pd["std_col"] = (
+        signal_pd["data"].rolling(window=window_size, center=True).std()
+    )
+    signal_pd["mean_col"] = (
+        signal_pd["data"].rolling(window=window_size, center=True).mean()
+    )
+    signal_pd["zscore"] = (signal_pd["data"] - signal_pd["mean_col"]) / signal_pd[
+        "std_col"
+    ]
 
     return signal_pd["zscore"]
 
 
 if __name__ == "__main__":
     img = read_images()
-    ims = cut_page(img)
-    process_images(img)
+    # process_images(img)
