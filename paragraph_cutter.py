@@ -20,7 +20,7 @@ def plot_projection(img, axis):
 def filter_title_pages(file_list):
     pages = {}
     for p in file_list:
-        pages[int(re.search(r"page([\d]{1,3})", p.path).group(1))] = p.path
+        pages[int(re.search(r"page([\d]{1,3})", p.path).group(1))] = p
 
     page_numbers = sorted(pages.keys())
     exclude_pages = page_numbers[:5] + page_numbers[-4:]
@@ -36,11 +36,11 @@ def filter_title_pages(file_list):
     # plt.hist(black_ratio, bins = 50)
     # plt.savefig("black_ratio.png")
 
-    return [k for k, v in pages.items() if k not in exclude_pages]
+    return [v for k, v in pages.items() if k not in exclude_pages]
 
 
 def read_image(img_path: str):
-    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(img_path.path, cv2.IMREAD_GRAYSCALE)
     # plot_projection(img, 0)
     #     plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
     #     plt.imshow(img, cmap="gray", interpolation="bicubic")
@@ -48,13 +48,12 @@ def read_image(img_path: str):
     return img
 
 
-def read_images():
+def get_paths():
     base = "HSH"
-    # file_list = os.listdir(base)
     file_list = os.scandir(base)
     file_list = filter_title_pages(file_list)
-    # print(f"{base}/{file_list[4]}")
-    # return read_image(f"{base}/{file_list[4]}")
+
+    return file_list
 
 
 def cut_page(img):
@@ -64,7 +63,7 @@ def cut_page(img):
     # A margin is taken to remove page edge peaks
     peaks, _ = find_peaks(smoothed[100:-100], height=230, distance=400)
 
-    return img[:, 0:peaks[0]], img[:, peaks[0]:peaks[1]], img[:, peaks[1]:]
+    return img[:, 0 : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
 
 
 def crop_top_bottom(ims):
@@ -140,9 +139,7 @@ def crop_lines(im):
     dilate = cv2.dilate(thresh, kernel, iterations=5)
 
     # Find all contours
-    contours, hierarchy = cv2.findContours(
-        dilate, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
-    )
+    contours, hierarchy = cv2.findContours(dilate, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
     cut_ims = []
@@ -209,19 +206,16 @@ def get_zscore(im, freq_cut, window_size):
     cut_signal = fftpack.ifft(cut_f_signal)
 
     signal_pd = pd.DataFrame(signal_series, columns=["data"])
-    signal_pd["std_col"] = (
-        signal_pd["data"].rolling(window=window_size, center=True).std()
-    )
-    signal_pd["mean_col"] = (
-        signal_pd["data"].rolling(window=window_size, center=True).mean()
-    )
-    signal_pd["zscore"] = (signal_pd["data"] - signal_pd["mean_col"]) / signal_pd[
-        "std_col"
-    ]
+    signal_pd["std_col"] = signal_pd["data"].rolling(window=window_size, center=True).std()
+    signal_pd["mean_col"] = signal_pd["data"].rolling(window=window_size, center=True).mean()
+    signal_pd["zscore"] = (signal_pd["data"] - signal_pd["mean_col"]) / signal_pd["std_col"]
 
     return signal_pd["zscore"]
 
 
 if __name__ == "__main__":
-    img = read_images()
-    # process_images(img)
+    img_paths = get_paths()
+    for im_path in img_paths[9:10]:
+        im = read_image(im_path)
+        # process_images(im)
+
