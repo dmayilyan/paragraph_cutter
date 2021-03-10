@@ -1,0 +1,8 @@
+--- # Volume 3
+3:
+  sample_pages: [9, 10, 11, 12, 14, 15, 16, 19, 33, 36, 38, 40, 41] 
+  peaks:
+    margin_left: 100
+    margin_right: 100
+    height: 230
+    distance: 400

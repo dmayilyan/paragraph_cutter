@@ -5,9 +5,15 @@ from multiprocessing import Pool
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 from scipy import fftpack
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks
+
+
+def read_config():
+    with open("HSH_config.yaml") as stream:
+        return yaml.safe_load(stream)
 
 
 def plot_projection(img, axis):
@@ -17,13 +23,15 @@ def plot_projection(img, axis):
     plt.show()
 
 
-def filter_title_pages(file_list):
+def filter_pages(file_list, exclude_pages=None):
     pages = {}
     for p in file_list:
         pages[int(re.search(r"page([\d]{1,3})", p.path).group(1))] = p
 
     page_numbers = sorted(pages.keys())
-    exclude_pages = page_numbers[:5] + page_numbers[-4:]
+    if not exclude_pages:
+        # [1, 2, 3, 4, 5, 717, 718, 719, 720]
+        exclude_pages = page_numbers[5:] + page_numbers[:-4]
 
     # black_ratio = []
     # for i, p in enumerate(file_list):
@@ -36,7 +44,7 @@ def filter_title_pages(file_list):
     # plt.hist(black_ratio, bins = 50)
     # plt.savefig("black_ratio.png")
 
-    return [v for k, v in pages.items() if k not in exclude_pages]
+    return [v for k, v in pages.items() if k in exclude_pages]
 
 
 def read_image(img_path: str):
@@ -51,19 +59,37 @@ def read_image(img_path: str):
 def get_paths():
     base = "HSH"
     file_list = os.scandir(base)
-    file_list = filter_title_pages(file_list)
+    file_list = filter_pages(file_list)
 
     return file_list
 
 
-def cut_page(img):
+def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
+    sample_pages = filter_pages(img_paths, sample_pages)
+    peak_locations = []
+    for p in sample_pages:
+        im = read_image(p)
+        peak_locations.append(cut_page(im, peak_config))
+
+    peak_locations = np.array(peak_locations)
+    print(peak_locations[:, 0], peak_locations[:, 1])
+
+    return int(peak_locations[:, 0].mean()), int(peak_locations[:, 1].mean())
+
+
+def cut_page(img, peak_config):
     # Horizontal averaging
     meanh = np.average(img, axis=0)
     smoothed = uniform_filter1d(meanh, size=10)
     # A margin is taken to remove page edge peaks
-    peaks, _ = find_peaks(smoothed[100:-100], height=230, distance=400)
+    peaks, _ = find_peaks(
+        smoothed[peak_config["margin_left"] : -peak_config["margin_right"]],
+        height=peak_config["height"],
+        distance=peak_config["distance"],
+    )
 
-    return img[:, 0 : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
+    # return img[:, 0 : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
+    return peaks[0], peaks[1]
 
 
 def crop_top_bottom(ims):
@@ -156,7 +182,7 @@ def crop_lines(im):
     return cut_ims
 
 
-def process_images(img):
+def process_images(img, cuts):
     print(img.shape)
     ims = cut_page(img)
     ims = crop_top_bottom(ims)
@@ -214,8 +240,10 @@ def get_zscore(im, freq_cut, window_size):
 
 
 if __name__ == "__main__":
+    volume = 3
     img_paths = get_paths()
+    config = read_config()
+    cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
     for im_path in img_paths[9:10]:
         im = read_image(im_path)
-        # process_images(im)
-
+        # process_images(im, cuts)
