@@ -30,7 +30,6 @@ def filter_pages(file_list, exclude_pages=None):
 
     page_numbers = sorted(pages.keys())
     if not exclude_pages:
-        # [1, 2, 3, 4, 5, 717, 718, 719, 720]
         exclude_pages = page_numbers[5:] + page_numbers[:-4]
 
     # black_ratio = []
@@ -69,15 +68,15 @@ def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
     peak_locations = []
     for p in sample_pages:
         im = read_image(p)
-        peak_locations.append(cut_page(im, peak_config))
+        peak_locations.append(get_peaks(im, peak_config))
 
     peak_locations = np.array(peak_locations)
-    print(peak_locations[:, 0], peak_locations[:, 1])
 
     return int(peak_locations[:, 0].mean()), int(peak_locations[:, 1].mean())
 
 
-def cut_page(img, peak_config):
+def get_peaks(img, peak_config):
+    print(img.shape)
     # Horizontal averaging
     meanh = np.average(img, axis=0)
     smoothed = uniform_filter1d(meanh, size=10)
@@ -88,8 +87,12 @@ def cut_page(img, peak_config):
         distance=peak_config["distance"],
     )
 
-    # return img[:, 0 : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
+    print(f"peaks: {peaks}")
     return peaks[0], peaks[1]
+
+
+def get_columns(img, peaks):
+    return img[:, 0 : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
 
 
 def crop_top_bottom(ims):
@@ -182,13 +185,11 @@ def crop_lines(im):
     return cut_ims
 
 
-def process_images(img, cuts):
-    print(img.shape)
-    ims = cut_page(img)
+def process_images(img, config, cuts):
+    peaks = get_peaks(img, config)
+    ims = get_columns(img, peaks)
     ims = crop_top_bottom(ims)
     ims = crop_left_right(ims)
-    print(ims[0].shape)
-    print(ims[0], "ims")
 
     # fig = plt.figure()
     # plt.imshow(ims[0])
@@ -199,7 +200,6 @@ def process_images(img, cuts):
     # with Pool(max_workers) as p:
     # cropped_lines.append(p.map(crop_lines, ims))
     for im in ims:
-        print(im)
         cropped_lines.append(crop_lines(im))
 
     fig = plt.figure()
@@ -244,6 +244,7 @@ if __name__ == "__main__":
     img_paths = get_paths()
     config = read_config()
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
-    for im_path in img_paths[9:10]:
+    for im_path in img_paths[16:17]:
         im = read_image(im_path)
-        # process_images(im, cuts)
+        print(im_path.name)
+        process_images(im, config[volume]["peaks"], cuts)
