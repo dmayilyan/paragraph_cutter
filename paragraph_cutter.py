@@ -87,8 +87,8 @@ def get_peaks(img, peak_config):
         distance=peak_config["distance"],
     )
 
-    print(f"peaks: {peaks}")
-    return peaks[0], peaks[1]
+    print(f"peaks: {peaks[0] + peak_config['margin_left'], peaks[1] + peak_config['margin_left']}")
+    return peaks[0] + peak_config["margin_left"], peaks[1] + peak_config["margin_left"] 
 
 
 def get_columns(img, peaks):
@@ -188,6 +188,9 @@ def crop_lines(im):
 def process_images(img, config, cuts):
     peaks = get_peaks(img, config)
     ims = get_columns(img, peaks)
+    fig = plt.figure()
+    plt.imshow(ims[0])
+    plt.savefig("qwe1.png")
     ims = crop_top_bottom(ims)
     ims = crop_left_right(ims)
 
@@ -244,7 +247,7 @@ if __name__ == "__main__":
     img_paths = get_paths()
     config = read_config()
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
-    for im_path in img_paths[16:17]:
+    for im_path in img_paths[17:18]:
         im = read_image(im_path)
         print(im_path.name)
         process_images(im, config[volume]["peaks"], cuts)
