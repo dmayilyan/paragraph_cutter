@@ -6,3 +6,5 @@ bandit
 pylint
 prospector
 scalene
+pytest-cov
+pytest-mock

@@ -88,7 +88,7 @@ def get_peaks(img, peak_config):
     )
 
     print(f"peaks: {peaks[0] + peak_config['margin_left'], peaks[1] + peak_config['margin_left']}")
-    return peaks[0] + peak_config["margin_left"], peaks[1] + peak_config["margin_left"] 
+    return peaks[0] + peak_config["margin_left"], peaks[1] + peak_config["margin_left"]
 
 
 def get_columns(img, peaks):
@@ -204,9 +204,13 @@ def process_images(img, config, cuts):
     # cropped_lines.append(p.map(crop_lines, ims))
     for im in ims:
         cropped_lines.append(crop_lines(im))
+    print(len(cropped_lines[0]))
 
-    fig = plt.figure()
-    plt.imshow(cropped_lines[0][3], cmap="gray")
+    fig = plt.figure(figsize=(40, 20))
+    for i, line in enumerate(cropped_lines[0]):
+        plt.subplot(20, 11, i + 1)
+        plt.imshow(cropped_lines[0][i], cmap="gray")
+    plt.tight_layout()
     plt.savefig("qwe.png")
 
     fig = plt.figure(figsize=(img.shape[0] / 100, img.shape[1] / 100))
