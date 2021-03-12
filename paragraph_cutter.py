@@ -23,14 +23,14 @@ def plot_projection(img, axis):
     plt.show()
 
 
-def filter_pages(file_list, exclude_pages=None):
+def filter_pages(file_list, include_pages=None):
     pages = {}
     for p in file_list:
         pages[int(re.search(r"page([\d]{1,3})", p.path).group(1))] = p
 
     page_numbers = sorted(pages.keys())
-    if not exclude_pages:
-        exclude_pages = page_numbers[5:] + page_numbers[:-4]
+    if not include_pages:
+        include_pages = page_numbers[5:-4]
 
     # black_ratio = []
     # for i, p in enumerate(file_list):
@@ -43,7 +43,7 @@ def filter_pages(file_list, exclude_pages=None):
     # plt.hist(black_ratio, bins = 50)
     # plt.savefig("black_ratio.png")
 
-    return [v for k, v in pages.items() if k in exclude_pages]
+    return [v for k, v in pages.items() if k in include_pages]
 
 
 def read_image(img_path: str):
@@ -58,6 +58,7 @@ def read_image(img_path: str):
 def get_paths():
     base = "HSH"
     file_list = os.scandir(base)
+    print(file_list)
     file_list = filter_pages(file_list)
 
     return file_list
