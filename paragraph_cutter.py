@@ -145,18 +145,19 @@ def crop_left_right(ims):
     return cr_ims
 
 
-def is_valid_segment(im_segment):
+def is_valid_segment(im_segment) -> bool:
     count = len(im_segment.flatten())
     if count < 600:
         return False
 
     side_ratio = im_segment.shape[1] / im_segment.shape[0]
-    if side_ratio < 5:
+    if side_ratio < 5 or side_ratio > 25:
         return False
 
     color_ratio = sum(im_segment.flatten() < 128) / count
-    if color_ratio < 0.16:
+    if color_ratio < 0.11:
         return False
+
 
     return True
 
@@ -165,7 +166,7 @@ def crop_lines(im):
     blur = cv2.GaussianBlur(im, (9, 1), 0)
     thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 1))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 1))
     dilate = cv2.dilate(thresh, kernel, iterations=5)
 
     # Find all contours
@@ -173,6 +174,7 @@ def crop_lines(im):
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
     cut_ims = []
+    cont_count = 0
     for contour in contours:
         minAreaRect = cv2.minAreaRect(contour)
         x, y, w, h = cv2.boundingRect(contour)
@@ -180,8 +182,24 @@ def crop_lines(im):
         y -= 2
         h += 4
         val_cut = is_valid_segment(im[y : y + h, x : x + w])
-        # if val_cut:
-        cut_ims.append(im[y : y + h, x : x + w])
+
+        if val_cut:
+            cont_count += 1
+            cut_ims.append(im[y : y + h, x : x + w])
+
+    box_contours = []
+    for cont in contours:
+        min_area = cv2.minAreaRect(cont)
+        boxPoints = cv2.boxPoints(min_area)
+        box = np.int0(boxPoints)
+        box_contours.append(box)
+
+    fig = plt.figure(figsize=(im.shape[0]/40, im.shape[1]/40))
+    cont_img = cv2.drawContours(im, box_contours, -1, (0, 255, 7), 1)
+    plt.imshow(cont_img, cmap = 'gray', interpolation = 'bicubic')
+    plt.savefig("cont_page.png")
+
+    print(f"cont count {cont_count}")
 
     return cut_ims
 
@@ -189,28 +207,29 @@ def crop_lines(im):
 def process_images(img, config, cuts):
     peaks = get_peaks(img, config)
     ims = get_columns(img, peaks)
-    fig = plt.figure()
-    plt.imshow(ims[0])
-    plt.savefig("qwe1.png")
+    #fig = plt.figure()
+    #plt.imshow(ims[0])
+    #plt.savefig("qwe1.png")
     ims = crop_top_bottom(ims)
     ims = crop_left_right(ims)
 
-    # fig = plt.figure()
-    # plt.imshow(ims[0])
-    # plt.savefig("qwe.png")
+    fig = plt.figure(figsize=(img.shape[0]/50, img.shape[1]/50))
+    plt.imshow(img, cmap="gray")
+    plt.savefig("page.png")
 
     cropped_lines = []
     max_workers = 4
     # with Pool(max_workers) as p:
     # cropped_lines.append(p.map(crop_lines, ims))
-    for im in ims:
+    for im in ims[1:2]:
         cropped_lines.append(crop_lines(im))
-    print(len(cropped_lines[0]))
 
     fig = plt.figure(figsize=(40, 20))
     for i, line in enumerate(cropped_lines[0]):
         plt.subplot(20, 11, i + 1)
         plt.imshow(cropped_lines[0][i], cmap="gray")
+        plt.title(f"{i} count: {len(line.flatten())}, s_ratio: {line.shape[1] / line.shape[0]:.0f} "
+        f"c_ratio: {sum(line.flatten() < 128) / len(line.flatten()):.2f}")
     plt.tight_layout()
     plt.savefig("qwe.png")
 
@@ -246,13 +265,17 @@ def get_zscore(im, freq_cut, window_size):
 
     return signal_pd["zscore"]
 
-
-if __name__ == "__main__":
+def main():
     volume = 3
     img_paths = get_paths()
     config = read_config()
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
+    print(cuts)
     for im_path in img_paths[17:18]:
-        im = read_image(im_path)
         print(im_path.name)
+        im = read_image(im_path)
         process_images(im, config[volume]["peaks"], cuts)
+
+
+if __name__ == "__main__": # pragma: no cover
+    main()
