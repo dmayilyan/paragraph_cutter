@@ -66,9 +66,16 @@ def get_paths():
 
 def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
     sample_pages = filter_pages(img_paths, sample_pages)
+
     peak_locations = []
     for p in sample_pages:
         im = read_image(p)
+        # tolerance: int = 220
+        # blur_img = cv2.GaussianBlur(im, (9, 1), 0)
+        # mm = np.mean(blur_img, axis=0)
+        # left_cut = get_horizontal_cut(mm, tolerance, right=False)
+        # im = im[:, left_cut]
+        # print("left cut done")
         peak_locations.append(get_peaks(im, peak_config))
 
     peak_locations = np.array(peak_locations)
@@ -121,24 +128,34 @@ def crop_top_bottom(ims):
     return cr_ims
 
 
-def crop_left_right(ims):
-    tolerance = 220
-    margin = 5
-    cr_ims = []
+def get_horizontal_cut(mm, tolerance: int, right: bool = False) -> int:
+    if right:
+        mm = mm[::-1]
+
+    cut: int = -1
+    for i, val in enumerate(mm):
+        if val < tolerance:
+            break
+        if right:
+            cut = mm.size - i
+        else:
+            cut = i
+
+    return cut
+
+
+def crop_left_right(ims) -> list:
+    tolerance: int = 220
+    margin: int = 5
+    cr_ims: list = []
     left_cut = right_cut = 0
     for im in ims:
         # We don't care about blur in other axis
         blur_img = cv2.GaussianBlur(im, (9, 1), 0)
         mm = np.mean(blur_img, axis=0)
-        for i, val in enumerate(mm):
-            if val < tolerance:
-                break
-            left_cut = i
 
-        for i, val in enumerate(mm[::-1]):
-            if val < tolerance:
-                break
-            right_cut = mm.size - i
+        left_cut = get_horizontal_cut(mm, tolerance, right=False)
+        right_cut = get_horizontal_cut(mm, tolerance, right=True)
 
         cr_ims.append(im[:, left_cut - margin : right_cut + margin])
 
@@ -157,7 +174,6 @@ def is_valid_segment(im_segment) -> bool:
     color_ratio = sum(im_segment.flatten() < 128) / count
     if color_ratio < 0.11:
         return False
-
 
     return True
 
@@ -194,9 +210,9 @@ def crop_lines(im):
         box = np.int0(boxPoints)
         box_contours.append(box)
 
-    fig = plt.figure(figsize=(im.shape[0]/40, im.shape[1]/40))
+    fig = plt.figure(figsize=(im.shape[0] / 40, im.shape[1] / 40))
     cont_img = cv2.drawContours(im, box_contours, -1, (0, 255, 7), 1)
-    plt.imshow(cont_img, cmap = 'gray', interpolation = 'bicubic')
+    plt.imshow(cont_img, cmap="gray", interpolation="bicubic")
     plt.savefig("cont_page.png")
 
     print(f"cont count {cont_count}")
@@ -207,13 +223,13 @@ def crop_lines(im):
 def process_images(img, config, cuts):
     peaks = get_peaks(img, config)
     ims = get_columns(img, peaks)
-    #fig = plt.figure()
-    #plt.imshow(ims[0])
-    #plt.savefig("qwe1.png")
+    # fig = plt.figure()
+    # plt.imshow(ims[0])
+    # plt.savefig("qwe1.png")
     ims = crop_top_bottom(ims)
     ims = crop_left_right(ims)
 
-    fig = plt.figure(figsize=(img.shape[0]/50, img.shape[1]/50))
+    fig = plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
     plt.imshow(img, cmap="gray")
     plt.savefig("page.png")
 
@@ -228,8 +244,10 @@ def process_images(img, config, cuts):
     for i, line in enumerate(cropped_lines[0]):
         plt.subplot(20, 11, i + 1)
         plt.imshow(cropped_lines[0][i], cmap="gray")
-        plt.title(f"{i} count: {len(line.flatten())}, s_ratio: {line.shape[1] / line.shape[0]:.0f} "
-        f"c_ratio: {sum(line.flatten() < 128) / len(line.flatten()):.2f}")
+        plt.title(
+            f"{i} count: {len(line.flatten())}, s_ratio: {line.shape[1] / line.shape[0]:.0f} "
+            f"c_ratio: {sum(line.flatten() < 128) / len(line.flatten()):.2f}"
+        )
     plt.tight_layout()
     plt.savefig("qwe.png")
 
@@ -265,6 +283,7 @@ def get_zscore(im, freq_cut, window_size):
 
     return signal_pd["zscore"]
 
+
 def main():
     volume = 3
     img_paths = get_paths()
@@ -277,5 +296,5 @@ def main():
         process_images(im, config[volume]["peaks"], cuts)
 
 
-if __name__ == "__main__": # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover
     main()
