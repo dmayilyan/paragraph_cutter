@@ -76,7 +76,7 @@ def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
     for i, p in enumerate(sample_pages):
         im = read_image(p)
         im = straighten_image(im)
-        im = preprocess_image(im)
+        # im = preprocess_image(im)
         peak_locations.append(get_peaks(im, peak_config))
 
     peak_locations: np.ndarray[np.int32] = np.array(peak_locations)
@@ -85,10 +85,10 @@ def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
 
 
 def get_peaks(img, peak_config):
-    print(img.shape)
+    print("img.shape", img.shape)
     # Horizontal averaging
     meanh = np.average(img, axis=0)
-    smoothed = uniform_filter1d(meanh, size=10)
+    smoothed = uniform_filter1d(meanh, size=8)
     # A margin is taken to remove page edge peaks
     peaks, _ = find_peaks(
         smoothed[peak_config["margin_left"] : -peak_config["margin_right"]],
@@ -101,11 +101,11 @@ def get_peaks(img, peak_config):
 
 
 def get_columns(img, peaks):
-    return img[:, 0 : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
+    return img[:, : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
 
 
 def crop_top_bottom(ims):
-    tolerance = 220
+    tolerance = 240
     margin = 5
     top_cut = bottom_cut = 0
     cr_ims = []
@@ -133,6 +133,10 @@ def get_horizontal_cut(mm, tolerance: int, right: bool = False) -> int:
     if right:
         mm = mm[::-1]
 
+        plt.plot(mm)
+        plt.savefig("average_plot.png")
+
+
     cut: int = -1
     for i, val in enumerate(mm):
         if val < tolerance:
@@ -146,8 +150,8 @@ def get_horizontal_cut(mm, tolerance: int, right: bool = False) -> int:
 
 
 def crop_left_right(ims) -> list:
-    tolerance: int = 220
-    margin: int = 5
+    tolerance: int = 245
+    margin: int = 7
     cr_ims: list = []
     left_cut = right_cut = 0
     for im in ims:
@@ -157,6 +161,7 @@ def crop_left_right(ims) -> list:
 
         left_cut = get_horizontal_cut(mm, tolerance, right=False)
         right_cut = get_horizontal_cut(mm, tolerance, right=True)
+        print("cuts: ", left_cut, right_cut)
 
         cr_ims.append(im[:, left_cut - margin : right_cut + margin])
 
@@ -243,7 +248,6 @@ def straighten_image(img):
         # if round(angle, 1) <= 360.0:
         # angles.append(angle)
 
-    print(angles)
     mean_angle = np.mean(angles)
     print(f"mean angle: {mean_angle}")
 
@@ -267,7 +271,7 @@ def preprocess_image(img):
 
 
 def process_images(img, config, cuts):
-
+    img = straighten_image(img)
     peaks = get_peaks(img, config)
     ims = get_columns(img, peaks)
     # fig = plt.figure()
@@ -343,10 +347,10 @@ def main():
     config = read_config()
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
     print(cuts)
-    # for im_path in img_paths[17:18]:
-    # print(im_path.name)
-    # im = read_image(im_path)
-    # process_images(im, config[volume]["peaks"], cuts)
+    for im_path in img_paths[18:19]:
+        print(im_path.name)
+        im = read_image(im_path)
+        process_images(im, config[volume]["peaks"], cuts)
 
 
 if __name__ == "__main__":  # pragma: no cover
