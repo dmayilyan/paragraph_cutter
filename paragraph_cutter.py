@@ -1,19 +1,19 @@
 import os
 import re
+from math import atan2, degrees
 from multiprocessing import Pool
+from typing import Any
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
+from beartype import beartype
 from scipy import fftpack
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks
-
-
-from skimage.transform import probabilistic_hough_line
 from skimage.feature import canny
-from math import atan2, degrees
+from skimage.transform import probabilistic_hough_line
 
 
 def read_config():
@@ -21,15 +21,15 @@ def read_config():
         return yaml.safe_load(stream)
 
 
-def plot_projection(img, axis):
+def plot_projection(img: Any, axis: int) -> None:
     meanh = np.average(img, axis=axis)
     plt.plot(meanh)
     plt.xlim(100, 1750)
     plt.show()
 
 
-def filter_pages(file_list, include_pages=None):
-    pages = {}
+def filter_pages(file_list, include_pages=None) -> list:
+    pages: dict = {}
     for p in file_list:
         pages[int(re.search(r"page([\d]{1,3})", p.path).group(1))] = p
 
@@ -51,7 +51,9 @@ def filter_pages(file_list, include_pages=None):
     return [v for k, v in pages.items() if k in include_pages]
 
 
-def read_image(img_path: str):
+# @beartype
+def read_image(img_path):
+    print(type(img_path))
     img = cv2.imread(img_path.path, cv2.IMREAD_GRAYSCALE)
     # plot_projection(img, 0)
     #     plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
@@ -61,15 +63,15 @@ def read_image(img_path: str):
 
 
 def get_paths():
-    base = "HSH"
+    base: str = "HSH"
     file_list = os.scandir(base)
-    print(file_list)
     file_list = filter_pages(file_list)
 
     return file_list
 
 
-def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
+@beartype
+def estimate_cuts(img_paths, sample_pages: list, peak_config: dict) -> tuple:
     sample_pages = filter_pages(img_paths, sample_pages)
 
     peak_locations = []
@@ -104,11 +106,11 @@ def get_columns(img, peaks):
     return img[:, : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
 
 
-def crop_top_bottom(ims):
-    tolerance = 240
-    margin = 5
+def crop_top_bottom(ims: list) -> list:
+    tolerance: int = 240
+    margin: int = 5
     top_cut = bottom_cut = 0
-    cr_ims = []
+    cr_ims: list = []
     for im in ims:
         # We don't care about blur in other axis
         blur_img = cv2.GaussianBlur(im, (1, 27), 0)
@@ -149,7 +151,8 @@ def get_horizontal_cut(mm, tolerance: int, right: bool = False) -> int:
     return cut
 
 
-def crop_left_right(ims) -> list:
+@beartype
+def crop_left_right(ims: list) -> list:
     tolerance: int = 245
     margin: int = 7
     cr_ims: list = []
@@ -169,22 +172,22 @@ def crop_left_right(ims) -> list:
 
 
 def is_valid_segment(im_segment) -> bool:
-    count = len(im_segment.flatten())
+    count: int = len(im_segment.flatten())
     if count < 600:
         return False
 
-    side_ratio = im_segment.shape[1] / im_segment.shape[0]
+    side_ratio: float = im_segment.shape[1] / im_segment.shape[0]
     if side_ratio < 5 or side_ratio > 25:
         return False
 
-    color_ratio = sum(im_segment.flatten() < 128) / count
+    color_ratio: float = sum(im_segment.flatten() < 128) / count
     if color_ratio < 0.11:
         return False
 
     return True
 
 
-def crop_lines(im):
+def crop_lines(im) -> list:
     blur = cv2.GaussianBlur(im, (9, 1), 0)
     thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
@@ -195,8 +198,7 @@ def crop_lines(im):
     contours, hierarchy = cv2.findContours(dilate, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-    cut_ims = []
-    cont_count = 0
+    cut_ims: list = []
     for contour in contours:
         minAreaRect = cv2.minAreaRect(contour)
         x, y, w, h = cv2.boundingRect(contour)
@@ -206,22 +208,21 @@ def crop_lines(im):
         val_cut = is_valid_segment(im[y : y + h, x : x + w])
 
         if val_cut:
-            cont_count += 1
             cut_ims.append(im[y : y + h, x : x + w])
 
-    box_contours = []
-    for cont in contours:
-        min_area = cv2.minAreaRect(cont)
-        boxPoints = cv2.boxPoints(min_area)
-        box = np.int0(boxPoints)
-        box_contours.append(box)
+    # box_contours = []
+    # for cont in contours:
+        # min_area = cv2.minAreaRect(cont)
+        # boxPoints = cv2.boxPoints(min_area)
+        # box = np.int0(boxPoints)
+        # box_contours.append(box)
 
-    fig = plt.figure(figsize=(im.shape[0] / 40, im.shape[1] / 40))
-    cont_img = cv2.drawContours(im, box_contours, -1, (0, 255, 7), 1)
-    plt.imshow(cont_img, cmap="gray", interpolation="bicubic")
-    plt.savefig("cont_page.png")
+    # fig = plt.figure(figsize=(im.shape[0] / 40, im.shape[1] / 40))
+    # cont_img = cv2.drawContours(im, box_contours, -1, (0, 255, 7), 1)
+    # plt.imshow(cont_img, cmap="gray", interpolation="bicubic")
+    # plt.savefig("cont_page.png")
 
-    print(f"cont count {cont_count}")
+    # print(f"cont count {cont_count}")
 
     return cut_ims
 
@@ -273,16 +274,16 @@ def preprocess_image(img):
 def process_images(img, config, cuts):
     img = straighten_image(img)
     peaks = get_peaks(img, config)
-    ims = get_columns(img, peaks)
+    ims: list = get_columns(img, peaks)
     # fig = plt.figure()
     # plt.imshow(ims[0])
     # plt.savefig("qwe1.png")
-    ims = crop_top_bottom(ims)
-    ims = crop_left_right(ims)
+    ims: list = crop_top_bottom(ims)
+    ims: list = crop_left_right(ims)
 
-    fig = plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
-    plt.imshow(img, cmap="gray")
-    plt.savefig("page.png")
+    # fig = plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
+    # plt.imshow(img, cmap="gray")
+    # plt.savefig("page.png")
 
     for i, col in enumerate(ims):
         fig = plt.figure(figsize=(col.shape[1] / 50, col.shape[0] / 50))
@@ -290,8 +291,8 @@ def process_images(img, config, cuts):
         plt.tight_layout()
         plt.savefig(f"col_{i}.png")
 
-    cropped_lines = []
-    max_workers = 4
+    cropped_lines: list = []
+    max_workers: int = 4
     # with Pool(max_workers) as p:
     # cropped_lines.append(p.map(crop_lines, ims))
     for im in ims[1:2]:
