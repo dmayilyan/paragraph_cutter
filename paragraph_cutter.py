@@ -11,6 +11,11 @@ from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks
 
 
+from skimage.transform import probabilistic_hough_line
+from skimage.feature import canny
+from math import atan2, degrees
+
+
 def read_config():
     with open("HSH_config.yaml") as stream:
         return yaml.safe_load(stream)
@@ -68,14 +73,10 @@ def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
     sample_pages = filter_pages(img_paths, sample_pages)
 
     peak_locations = []
-    for p in sample_pages:
+    for i, p in enumerate(sample_pages):
         im = read_image(p)
-        # tolerance: int = 220
-        # blur_img = cv2.GaussianBlur(im, (9, 1), 0)
-        # mm = np.mean(blur_img, axis=0)
-        # left_cut = get_horizontal_cut(mm, tolerance, right=False)
-        # im = im[:, left_cut]
-        # print("left cut done")
+        im = straighten_image(im)
+        im = preprocess_image(im)
         peak_locations.append(get_peaks(im, peak_config))
 
     peak_locations = np.array(peak_locations)
@@ -220,7 +221,51 @@ def crop_lines(im):
     return cut_ims
 
 
+def straighten_image(img):
+
+    image_orig = img.copy()
+    dim = (int(img.shape[1]/2), int(img.shape[0]/2))
+    img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+
+    img = cv2.GaussianBlur(img, (13, 13), 0)
+
+    edges = canny(img, 2)
+    tested_angles = np.linspace(-np.pi / 15, np.pi / 15, 200, endpoint=False)
+    lines = probabilistic_hough_line(edges, threshold=240, line_length=dim[1] - int(dim[1]*0.2), line_gap=int(dim[0] / 3), theta=tested_angles)
+
+    angles = []
+    for line in lines:
+        p0, p1 = line
+        angle = 90 + degrees(atan2(p1[1] - p0[1], p1[0] - p0[0]))
+        angles.append(angle)
+        # if round(angle, 1) <= 360.0:
+            # angles.append(angle)
+    
+    print(angles)
+    mean_angle = np.mean(angles)
+    print(f"mean angle: {mean_angle}")
+
+    (h, w) = image_orig.shape[:2]
+
+    center = (w // 2, h // 2)
+
+    # perform the rotation
+    M = cv2.getRotationMatrix2D(center, mean_angle, 1.0)
+    return cv2.warpAffine(image_orig, M, (w, h), borderValue=255)
+
+
+
+def preprocess_image(img):
+    tolerance: int = 220
+    margin: int = 9
+    blur_img = cv2.GaussianBlur(img, (9, 1), 0)
+    mm = np.mean(blur_img, axis=0)
+    left_cut = get_horizontal_cut(mm, tolerance, right=False)
+
+    return img[:, left_cut - margin:]
+
 def process_images(img, config, cuts):
+
     peaks = get_peaks(img, config)
     ims = get_columns(img, peaks)
     # fig = plt.figure()
@@ -232,6 +277,12 @@ def process_images(img, config, cuts):
     fig = plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
     plt.imshow(img, cmap="gray")
     plt.savefig("page.png")
+
+    for i, col in enumerate(ims):
+        fig = plt.figure(figsize=(col.shape[1] / 50, col.shape[0] / 50))
+        plt.imshow(col, cmap="gray")
+        plt.tight_layout()
+        plt.savefig(f"col_{i}.png")
 
     cropped_lines = []
     max_workers = 4
@@ -290,10 +341,10 @@ def main():
     config = read_config()
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
     print(cuts)
-    for im_path in img_paths[17:18]:
-        print(im_path.name)
-        im = read_image(im_path)
-        process_images(im, config[volume]["peaks"], cuts)
+    # for im_path in img_paths[17:18]:
+        # print(im_path.name)
+        # im = read_image(im_path)
+        # process_images(im, config[volume]["peaks"], cuts)
 
 
 if __name__ == "__main__":  # pragma: no cover
