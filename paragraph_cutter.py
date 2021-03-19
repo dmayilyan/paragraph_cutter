@@ -79,7 +79,7 @@ def estimate_cuts(img_paths, sample_pages: list, peak_config: dict):
         im = preprocess_image(im)
         peak_locations.append(get_peaks(im, peak_config))
 
-    peak_locations = np.array(peak_locations)
+    peak_locations: np.ndarray[np.int32] = np.array(peak_locations)
 
     return int(peak_locations[:, 0].mean()), int(peak_locations[:, 1].mean())
 
@@ -224,14 +224,16 @@ def crop_lines(im):
 def straighten_image(img):
 
     image_orig = img.copy()
-    dim = (int(img.shape[1]/2), int(img.shape[0]/2))
-    img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+    dim = (int(img.shape[1] / 2), int(img.shape[0] / 2))
+    img = cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
 
     img = cv2.GaussianBlur(img, (13, 13), 0)
 
     edges = canny(img, 2)
     tested_angles = np.linspace(-np.pi / 15, np.pi / 15, 200, endpoint=False)
-    lines = probabilistic_hough_line(edges, threshold=240, line_length=dim[1] - int(dim[1]*0.2), line_gap=int(dim[0] / 3), theta=tested_angles)
+    lines = probabilistic_hough_line(
+        edges, threshold=240, line_length=dim[1] - int(dim[1] * 0.2), line_gap=int(dim[0] / 3), theta=tested_angles
+    )
 
     angles = []
     for line in lines:
@@ -239,8 +241,8 @@ def straighten_image(img):
         angle = 90 + degrees(atan2(p1[1] - p0[1], p1[0] - p0[0]))
         angles.append(angle)
         # if round(angle, 1) <= 360.0:
-            # angles.append(angle)
-    
+        # angles.append(angle)
+
     print(angles)
     mean_angle = np.mean(angles)
     print(f"mean angle: {mean_angle}")
@@ -254,7 +256,6 @@ def straighten_image(img):
     return cv2.warpAffine(image_orig, M, (w, h), borderValue=255)
 
 
-
 def preprocess_image(img):
     tolerance: int = 220
     margin: int = 9
@@ -262,7 +263,8 @@ def preprocess_image(img):
     mm = np.mean(blur_img, axis=0)
     left_cut = get_horizontal_cut(mm, tolerance, right=False)
 
-    return img[:, left_cut - margin:]
+    return img[:, left_cut - margin :]
+
 
 def process_images(img, config, cuts):
 
@@ -342,9 +344,9 @@ def main():
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
     print(cuts)
     # for im_path in img_paths[17:18]:
-        # print(im_path.name)
-        # im = read_image(im_path)
-        # process_images(im, config[volume]["peaks"], cuts)
+    # print(im_path.name)
+    # im = read_image(im_path)
+    # process_images(im, config[volume]["peaks"], cuts)
 
 
 if __name__ == "__main__":  # pragma: no cover
