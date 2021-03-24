@@ -8,3 +8,4 @@ prospector
 scalene
 pytest-cov
 pytest-mock
+data-science-types

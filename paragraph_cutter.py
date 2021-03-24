@@ -1,7 +1,6 @@
 import os
 import re
 from math import atan2, degrees
-from multiprocessing import Pool
 from typing import Any
 
 import cv2
@@ -15,20 +14,24 @@ from scipy.signal import find_peaks
 from skimage.feature import canny
 from skimage.transform import probabilistic_hough_line
 
+from hdf_writer import write_page
 
-def read_config():
+@beartype
+def read_config() -> dict:
     with open("HSH_config.yaml") as stream:
         return yaml.safe_load(stream)
 
 
+@beartype
 def plot_projection(img: Any, axis: int) -> None:
-    meanh = np.average(img, axis=axis)
+    meanh = np.mean(img, axis=axis)
     plt.plot(meanh)
     plt.xlim(100, 1750)
     plt.show()
 
 
-def filter_pages(file_list, include_pages=None) -> list:
+@beartype
+def filter_pages(file_list: Any, include_pages: list = None) -> list:
     pages: dict = {}
     for p in file_list:
         pages[int(re.search(r"page([\d]{1,3})", p.path).group(1))] = p
@@ -53,7 +56,6 @@ def filter_pages(file_list, include_pages=None) -> list:
 
 # @beartype
 def read_image(img_path):
-    print(type(img_path))
     img = cv2.imread(img_path.path, cv2.IMREAD_GRAYSCALE)
     # plot_projection(img, 0)
     #     plt.figure(figsize=(img.shape[0] / 50, img.shape[1] / 50))
@@ -71,7 +73,7 @@ def get_paths():
 
 
 @beartype
-def estimate_cuts(img_paths, sample_pages: list, peak_config: dict) -> tuple:
+def estimate_cuts(img_paths, sample_pages: list, peak_config: dict) -> tuple[int, int]:
     sample_pages = filter_pages(img_paths, sample_pages)
 
     peak_locations = []
@@ -86,8 +88,8 @@ def estimate_cuts(img_paths, sample_pages: list, peak_config: dict) -> tuple:
     return int(peak_locations[:, 0].mean()), int(peak_locations[:, 1].mean())
 
 
+@beartype
 def get_peaks(img, peak_config):
-    print("img.shape", img.shape)
     # Horizontal averaging
     meanh = np.average(img, axis=0)
     smoothed = uniform_filter1d(meanh, size=8)
@@ -102,10 +104,12 @@ def get_peaks(img, peak_config):
     return peaks[0] + peak_config["margin_left"], peaks[1] + peak_config["margin_left"]
 
 
+@beartype
 def get_columns(img, peaks):
     return img[:, : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
 
 
+@beartype
 def crop_top_bottom(ims: list) -> list:
     tolerance: int = 240
     margin: int = 5
@@ -131,13 +135,13 @@ def crop_top_bottom(ims: list) -> list:
     return cr_ims
 
 
+@beartype
 def get_horizontal_cut(mm, tolerance: int, right: bool = False) -> int:
     if right:
         mm = mm[::-1]
 
         plt.plot(mm)
         plt.savefig("average_plot.png")
-
 
     cut: int = -1
     for i, val in enumerate(mm):
@@ -171,6 +175,7 @@ def crop_left_right(ims: list) -> list:
     return cr_ims
 
 
+@beartype
 def is_valid_segment(im_segment) -> bool:
     count: int = len(im_segment.flatten())
     if count < 600:
@@ -187,7 +192,7 @@ def is_valid_segment(im_segment) -> bool:
     return True
 
 
-def crop_lines(im) -> list:
+def crop_lines(im) -> dict:
     blur = cv2.GaussianBlur(im, (9, 1), 0)
     thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
@@ -198,24 +203,28 @@ def crop_lines(im) -> list:
     contours, hierarchy = cv2.findContours(dilate, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-    cut_ims: list = []
+    cut_ims: dict = {}
+    counter: int = 0
     for contour in contours:
         minAreaRect = cv2.minAreaRect(contour)
         x, y, w, h = cv2.boundingRect(contour)
         # Margin adjustment
         y -= 2
         h += 4
-        val_cut = is_valid_segment(im[y : y + h, x : x + w])
+        valid_cut = is_valid_segment(im[y : y + h, x : x + w])
 
-        if val_cut:
-            cut_ims.append(im[y : y + h, x : x + w])
+        if valid_cut:
+            cut_ims[counter] = ((x, y, w, h), im[y : y + h, x : x + w])
+
+            # cut_ims.append(im[y : y + h, x : x + w])
+            counter += 1
 
     # box_contours = []
     # for cont in contours:
-        # min_area = cv2.minAreaRect(cont)
-        # boxPoints = cv2.boxPoints(min_area)
-        # box = np.int0(boxPoints)
-        # box_contours.append(box)
+    # min_area = cv2.minAreaRect(cont)
+    # boxPoints = cv2.boxPoints(min_area)
+    # box = np.int0(boxPoints)
+    # box_contours.append(box)
 
     # fig = plt.figure(figsize=(im.shape[0] / 40, im.shape[1] / 40))
     # cont_img = cv2.drawContours(im, box_contours, -1, (0, 255, 7), 1)
@@ -250,15 +259,15 @@ def straighten_image(img):
         # angles.append(angle)
 
     mean_angle = np.mean(angles)
-    print(f"mean angle: {mean_angle}")
+    # print(f"mean angle: {mean_angle}")
 
     (h, w) = image_orig.shape[:2]
 
     center = (w // 2, h // 2)
 
     # perform the rotation
-    M = cv2.getRotationMatrix2D(center, mean_angle, 1.0)
-    return cv2.warpAffine(image_orig, M, (w, h), borderValue=255)
+    mat = cv2.getRotationMatrix2D(center, mean_angle, 1.0)
+    return cv2.warpAffine(image_orig, mat, (w, h), borderValue=255)
 
 
 def preprocess_image(img):
@@ -271,7 +280,8 @@ def preprocess_image(img):
     return img[:, left_cut - margin :]
 
 
-def process_images(img, config, cuts):
+@beartype
+def process_images(img, config, cuts) -> None:
     img = straighten_image(img)
     peaks = get_peaks(img, config)
     ims: list = get_columns(img, peaks)
@@ -296,32 +306,34 @@ def process_images(img, config, cuts):
     # with Pool(max_workers) as p:
     # cropped_lines.append(p.map(crop_lines, ims))
     for im in ims[1:2]:
-        cropped_lines.append(crop_lines(im))
+        column_lines = crop_lines(im)
+        cropped_lines.append(column_lines)
+        write_page(volume, page, column_lines)  # TODO
 
-    fig = plt.figure(figsize=(40, 20))
-    for i, line in enumerate(cropped_lines[0]):
-        plt.subplot(20, 11, i + 1)
-        plt.imshow(cropped_lines[0][i], cmap="gray")
-        plt.title(
-            f"{i} count: {len(line.flatten())}, s_ratio: {line.shape[1] / line.shape[0]:.0f} "
-            f"c_ratio: {sum(line.flatten() < 128) / len(line.flatten()):.2f}"
-        )
-    plt.tight_layout()
-    plt.savefig("qwe.png")
+    # fig = plt.figure(figsize=(40, 20))
+    # for i, line in enumerate(cropped_lines[0]):
+    # plt.subplot(20, 11, i + 1)
+    # plt.imshow(cropped_lines[0][i], cmap="gray")
+    # plt.title(
+    # f"{i} count: {len(line.flatten())}, s_ratio: {line.shape[1] / line.shape[0]:.0f} "
+    # f"c_ratio: {sum(line.flatten() < 128) / len(line.flatten()):.2f}"
+    # )
+    # plt.tight_layout()
+    # plt.savefig("qwe.png")
 
-    fig = plt.figure(figsize=(img.shape[0] / 100, img.shape[1] / 100))
-    fig.suptitle("Cuts of the page")
-    gs = fig.add_gridspec(nrows=1, ncols=3, wspace=0, hspace=0)
-    axs = gs.subplots(sharey="row")
+    # fig = plt.figure(figsize=(img.shape[0] / 100, img.shape[1] / 100))
+    # fig.suptitle("Cuts of the page")
+    # gs = fig.add_gridspec(nrows=1, ncols=3, wspace=0, hspace=0)
+    # axs = gs.subplots(sharey="row")
 
-    for ax, im in zip(axs, ims):
-        ax.imshow(im, cmap="gray", interpolation="bicubic")
-        ax.label_outer()
+    # for ax, im in zip(axs, ims):
+    # ax.imshow(im, cmap="gray", interpolation="bicubic")
+    # ax.label_outer()
 
-    plt.show()
+    # plt.show()
 
 
-def get_zscore(im, freq_cut, window_size):
+def get_zscore(im: Any, freq_cut, window_size):
     meanv = np.mean(im, axis=1)
     transformed = fftpack.fft(meanv)
 
@@ -342,14 +354,12 @@ def get_zscore(im, freq_cut, window_size):
     return signal_pd["zscore"]
 
 
-def main():
-    volume = 3
+def main() -> None:
+    volume: int = 3
     img_paths = get_paths()
-    config = read_config()
+    config: dict = read_config()
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
-    print(cuts)
     for im_path in img_paths[18:19]:
-        print(im_path.name)
         im = read_image(im_path)
         process_images(im, config[volume]["peaks"], cuts)
 

@@ -1,9 +1,23 @@
-import os
+# import os
 
+from pyannotate_runtime import collect_types
 from pytest import fixture
-from pytest_mock import MockerFixture, mocker
 
-from paragraph_cutter import get_paths, filter_pages
+from paragraph_cutter import estimate_cuts, filter_pages
+
+collect_types.init_types_collection()
+
+collect_types.start()
+
+
+@fixture
+def sample_config():
+    return {
+        3: {
+            "sample_pages": [9, 11, 12, 14, 15, 16, 19, 33, 38, 40, 41],
+            "peaks": {"margin_left": 200, "margin_right": 200, "height": 240, "distance": 400},
+        }
+    }
 
 
 class FileList:
@@ -39,9 +53,9 @@ class DirEntry:
         return self
 
 
-def test_get_paths(mocker: MockerFixture):
-    mocker.patch("os.scandir", return_value=FileList, autospec=True)
-    assert get_paths() == ["qwe", "123"]
+# def test_get_paths(mocker: MockerFixture):
+# mocker.patch("os.scandir", return_value=FileList, autospec=True)
+# assert get_paths() == ["qwe", "123"]
 
 
 def test_filter_pages_include():
@@ -51,9 +65,22 @@ def test_filter_pages_include():
     assert list(filter_pages(file_list, include_pages=[20]))[0].name == "test_page20.jpg"
 
 
-def test_filter_pages_None():
+def test_filter_pages_none():
     file_list = FileList()
     assert len(filter_pages(file_list)) == 114
+
+
+def test_estimate_cuts(sample_config):
+    volume = 3
+    peak_config = sample_config[volume]["peaks"]
+    sample_pages = sample_config[volume]["sample_pages"]
+
+    cuts = estimate_cuts(img_paths, sample_pages, peak_pages)  # TODO
+    assert cuts == 3
+
+
+collect_types.stop()
+collect_types.dump_stats("types.json")
 
 
 if __name__ == "__main__":
