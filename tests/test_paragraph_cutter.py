@@ -1,9 +1,9 @@
-# import os
-
+import cv2
+import numpy as np
 from pyannotate_runtime import collect_types
 from pytest import fixture, mark
 
-from paragraph_cutter import filter_pages, estimate_cuts
+from paragraph_cutter import estimate_cuts, filter_pages, get_columns
 
 collect_types.init_types_collection()
 
@@ -58,6 +58,13 @@ def file_list():
     return FileList()
 
 
+@fixture
+def image():
+    np_array = np.ones((2, 333))
+    cv2.imwrite("tmp_image.png", np_array)
+    return cv2.imread("tmp_image.png")
+
+
 # def test_get_paths(mocker: MockerFixture):
 # mocker.patch("os.scandir", return_value=FileList, autospec=True)
 # assert get_paths() == ["qwe", "123"]
@@ -73,7 +80,11 @@ def test_filter_pages_none(file_list):
     assert len(filter_pages(file_list)) == 114
 
 
-@mark.skip(reason="Need prior setup to test this.") 
+def test_get_columns(image):
+    assert len(get_columns(image, [11, 22])) == 3
+
+
+@mark.skip(reason="Need prior setup to test this.")
 def test_estimate_cuts(sample_config, file_list):
     volume = 3
     peak_pages = sample_config[volume]["peaks"]
@@ -89,7 +100,4 @@ collect_types.dump_stats("types.json")
 
 
 if __name__ == "__main__":
-    filelist = FileList()
-    print(type(i) for i in FileList())
-    for i in filelist:
-        print(i.name, i.path)
+    image()
