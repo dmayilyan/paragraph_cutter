@@ -1,7 +1,7 @@
 import os
 import re
 from math import atan2, degrees
-from typing import Any
+from typing import Any, Tuple
 
 import cv2
 import matplotlib.pyplot as plt
@@ -14,7 +14,10 @@ from scipy.signal import find_peaks
 from skimage.feature import canny
 from skimage.transform import probabilistic_hough_line
 
-from hdf_writer import write_page
+from hdf_writer import write_column
+
+volume: int = 3
+
 
 @beartype
 def read_config() -> dict:
@@ -73,11 +76,11 @@ def get_paths():
 
 
 @beartype
-def estimate_cuts(img_paths, sample_pages: list, peak_config: dict) -> tuple[int, int]:
+def estimate_cuts(img_paths, sample_pages: list, peak_config: dict) -> Tuple[int, int]:
     sample_pages = filter_pages(img_paths, sample_pages)
 
     peak_locations = []
-    for i, p in enumerate(sample_pages):
+    for p in sample_pages:
         im = read_image(p)
         im = straighten_image(im)
         # im = preprocess_image(im)
@@ -109,7 +112,6 @@ def get_columns(img, peaks):
     return img[:, : peaks[0]], img[:, peaks[0] : peaks[1]], img[:, peaks[1] :]
 
 
-@beartype
 def crop_top_bottom(ims: list) -> list:
     tolerance: int = 240
     margin: int = 5
@@ -280,10 +282,11 @@ def preprocess_image(img):
     return img[:, left_cut - margin :]
 
 
-@beartype
-def process_images(img, config, cuts) -> None:
+def process_images(img, config, im_path, cuts) -> None:
+    peak_config = config[volume]["peaks"]
+
     img = straighten_image(img)
-    peaks = get_peaks(img, config)
+    peaks = get_peaks(img, peak_config)
     ims: list = get_columns(img, peaks)
     # fig = plt.figure()
     # plt.imshow(ims[0])
@@ -295,11 +298,11 @@ def process_images(img, config, cuts) -> None:
     # plt.imshow(img, cmap="gray")
     # plt.savefig("page.png")
 
-    for i, col in enumerate(ims):
-        fig = plt.figure(figsize=(col.shape[1] / 50, col.shape[0] / 50))
-        plt.imshow(col, cmap="gray")
-        plt.tight_layout()
-        plt.savefig(f"col_{i}.png")
+    #  for i, col in enumerate(ims):
+    #  fig = plt.figure(figsize=(col.shape[1] / 50, col.shape[0] / 50))
+    #  plt.imshow(col, cmap="gray")
+    #  plt.tight_layout()
+    #  plt.savefig(f"col_{i}.png")
 
     cropped_lines: list = []
     max_workers: int = 4
@@ -308,7 +311,7 @@ def process_images(img, config, cuts) -> None:
     for im in ims[1:2]:
         column_lines = crop_lines(im)
         cropped_lines.append(column_lines)
-        write_page(volume, page, column_lines)  # TODO
+        write_column(volume, im_path, column_lines)  # TODO
 
     # fig = plt.figure(figsize=(40, 20))
     # for i, line in enumerate(cropped_lines[0]):
@@ -355,13 +358,12 @@ def get_zscore(im: Any, freq_cut, window_size):
 
 
 def main() -> None:
-    volume: int = 3
     img_paths = get_paths()
     config: dict = read_config()
     cuts = estimate_cuts(img_paths, config[volume]["sample_pages"], config[volume]["peaks"])
     for im_path in img_paths[18:19]:
         im = read_image(im_path)
-        process_images(im, config[volume]["peaks"], cuts)
+        process_images(im, config, im_path, cuts)
 
 
 if __name__ == "__main__":  # pragma: no cover

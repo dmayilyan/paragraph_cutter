@@ -1,21 +1,35 @@
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 
-def flatten_image(im):
-    if im.shape[1] != 1:
-        print("Image is not b/w")
-        return
+def extract_info(image_path):
+    print(image_path.name)
+    book, b, c = image_path.name.split("_")
+    volume = "".join(i for i in b if i.isdigit())
+    page = "".join(i for i in c if i.isdigit())
 
-    return im.flatten()
+    return book, volume, page
 
 
-def write_page(page):
-    print(page.items())
-    ...
+def write_column(volume, im_path, column_lines):
+    book, volume, page = extract_info(im_path)
 
-def write_column(col):
-    ...
+    with h5py.File(f"{book}.h5", "w") as hdf:
+        for _, segment_data in column_lines.items():
+            hdf_path = f"volume_{volume}/{page}"
+            if not hdf.__contains__(hdf_path):
+                hdfgroup = hdf.create_group(f"volume_{volume}/{page}")
 
+            segment_string = "_".join(str(i) for i in segment_data[0])
+            hdfgroup.create_dataset(f"ps_{segment_string}", data=segment_data[1])
+
+
+def read_h5():
+    book = "HSH"
+    with h5py.File(f"{book}.h5", "r") as hdf:
+        for a, b in list(hdf["volume_3/255"].items()):
+            plt.imshow(b)
+            plt.savefig(f"{a}.png")
 
 
 def main(volume=None, page=None, segment=None):
@@ -37,7 +51,4 @@ def main(volume=None, page=None, segment=None):
 
 
 if __name__ == "__main__":  # pragma: no cover
-    volume: int = 3
-    page: int = 123
-    segment: list = [[2, 2], [5, 6]]
-    main(volume, page, segment)
+    read_h5()
